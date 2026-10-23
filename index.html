@@ -1,124 +1,435 @@
-<!doctype html>
+
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <meta
-      name="description"
-      content="A simple English and Morse code translator with translation history."
-    />
+  <meta
+    name="description"
+    content="MorseFlow is a modern English and Morse code translator with audio playback, practice mode, and translation history."
+  >
 
-    <title>MorseFlow | Morse Code Translator</title>
+  <meta name="theme-color" content="#0b1020">
 
-    <link rel="stylesheet" href="style.css" />
-    <script src="script.js" defer></script>
-  </head>
-  <body>
-    <header class="header">
-      <a href="#" class="logo">
-        <span class="logo-icon">·−</span>
-        MorseFlow
-      </a>
+  <title>MorseFlow | Morse Code Translator</title>
 
-      <button
-        id="theme-toggle"
-        class="theme-toggle"
-        type="button"
-        aria-label="Switch color theme"
-      >
-        ☀️
-      </button>
-    </header>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
 
-    <main class="container">
-      <section class="hero">
-        <p class="eyebrow">THE LANGUAGE OF DOTS AND DASHES</p>
-        <h1>Words into signals.</h1>
-        <p class="subtitle">
-          Translate English to Morse code and back again. Simple, fast, and
-          private.
+<body>
+  <!-- Header -->
+  <header class="header">
+    <a href="#" class="logo" aria-label="MorseFlow home">
+      <span class="logo-icon" aria-hidden="true">·−</span>
+      MorseFlow
+    </a>
+
+    <button
+      id="theme-toggle"
+      class="theme-toggle"
+      type="button"
+      aria-label="Switch color theme"
+      title="Switch theme"
+    >
+      ☀️
+    </button>
+  </header>
+
+  <main class="container">
+
+    <!-- Hero -->
+    <section class="hero">
+      <p class="eyebrow">THE LANGUAGE OF DOTS AND DASHES</p>
+
+      <h1>Words into signals.</h1>
+
+      <p class="subtitle">
+        Translate, listen, and learn Morse code.
+        Simple, fast, and private.
+      </p>
+    </section>
+
+    <!-- Main navigation -->
+    <nav class="feature-nav" aria-label="MorseFlow features">
+      <a href="#translator-section">Translator</a>
+      <a href="#audio-section">Audio player</a>
+      <a href="#practice-section">Practice</a>
+      <a href="#history-section">History</a>
+    </nav>
+
+    <!-- Translator -->
+    <section
+      id="translator-section"
+      class="translator"
+      aria-labelledby="translator-heading"
+    >
+      <div class="section-intro">
+        <h2 id="translator-heading">Translator</h2>
+        <p>Convert text between English and Morse code.</p>
+      </div>
+
+      <div class="toolbar">
+        <label for="direction">Translation mode</label>
+
+        <select id="direction">
+          <option value="english-to-morse">English → Morse</option>
+          <option value="morse-to-english">Morse → English</option>
+        </select>
+      </div>
+
+      <div class="editor-grid">
+
+        <!-- Input -->
+        <div class="panel">
+          <div class="panel-header">
+            <label for="input-text" id="input-label">
+              English text
+            </label>
+
+            <span id="input-count">0 characters</span>
+          </div>
+
+          <textarea
+            id="input-text"
+            placeholder="Type English text here..."
+            rows="7"
+            spellcheck="false"
+            aria-describedby="input-help"
+          ></textarea>
+
+          <p id="input-help" class="field-help">
+            Enter the text you want to translate.
+          </p>
+
+          <button
+            id="clear-button"
+            class="text-button"
+            type="button"
+          >
+            Clear input
+          </button>
+        </div>
+
+        <!-- Output -->
+        <div class="panel output-panel">
+          <div class="panel-header">
+            <label for="output-text" id="output-label">
+              Morse code
+            </label>
+
+            <span id="output-count">0 characters</span>
+          </div>
+
+          <textarea
+            id="output-text"
+            placeholder="Your translation will appear here..."
+            rows="7"
+            readonly
+            spellcheck="false"
+            aria-live="polite"
+          ></textarea>
+
+          <p class="field-help">
+            Your translated result appears here.
+          </p>
+
+          <button
+            id="copy-button"
+            class="text-button"
+            type="button"
+          >
+            Copy translation
+          </button>
+        </div>
+      </div>
+
+      <p
+        id="status-message"
+        class="status-message"
+        role="status"
+        aria-live="polite"
+      ></p>
+    </section>
+
+    <!-- Morse audio player -->
+    <section
+      id="audio-section"
+      class="feature-section"
+      aria-labelledby="audio-heading"
+    >
+      <div class="section-intro">
+        <p class="eyebrow">LISTEN AND LEARN</p>
+        <h2 id="audio-heading">Morse audio player</h2>
+        <p>Listen to your translated Morse code as audio signals.</p>
+      </div>
+
+      <div class="feature-card audio-card">
+        <div class="audio-settings">
+          <div class="setting-field">
+            <label for="audio-speed">Playback speed</label>
+
+            <select id="audio-speed">
+              <option value="slow">Slow</option>
+              <option value="normal" selected>Normal</option>
+              <option value="fast">Fast</option>
+            </select>
+          </div>
+
+          <div class="setting-field">
+            <label for="audio-frequency">Tone frequency</label>
+
+            <select id="audio-frequency">
+              <option value="400">400 Hz</option>
+              <option value="600" selected>600 Hz</option>
+              <option value="800">800 Hz</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="audio-controls">
+          <button
+            id="play-audio-button"
+            class="primary-button"
+            type="button"
+          >
+            ▶ Play Morse
+          </button>
+
+          <button
+            id="pause-audio-button"
+            class="secondary-button"
+            type="button"
+            disabled
+          >
+            ⏸ Pause
+          </button>
+
+          <button
+            id="stop-audio-button"
+            class="secondary-button"
+            type="button"
+            disabled
+          >
+            ■ Stop
+          </button>
+        </div>
+
+        <p
+          id="audio-status"
+          class="status-message"
+          role="status"
+          aria-live="polite"
+        >
+          Translate some text to get started.
         </p>
-      </section>
+      </div>
+    </section>
 
-      <section class="translator">
-        <div class="toolbar">
-          <label for="direction">Translation mode</label>
+    <!-- Practice mode -->
+    <section
+      id="practice-section"
+      class="feature-section"
+      aria-labelledby="practice-heading"
+    >
+      <div class="section-intro">
+        <p class="eyebrow">TEST YOUR KNOWLEDGE</p>
+        <h2 id="practice-heading">Morse practice</h2>
+        <p>Practice decoding Morse code and check your answers.</p>
+      </div>
 
-          <select id="direction">
+      <div class="feature-card practice-card">
+        <div class="practice-top">
+          <span class="practice-badge">PRACTICE MODE</span>
+
+          <div class="practice-score">
+            Score:
+            <strong id="practice-score">0 / 0</strong>
+          </div>
+        </div>
+
+        <div class="practice-question">
+          <p id="practice-instruction">
+            Decode this Morse code:
+          </p>
+
+          <div
+            id="practice-prompt"
+            class="practice-prompt"
+            aria-live="polite"
+          >
+            Press Start to begin
+          </div>
+        </div>
+
+        <form id="practice-form">
+          <label for="practice-answer">Your answer</label>
+
+          <input
+            id="practice-answer"
+            type="text"
+            placeholder="Type your answer..."
+            autocomplete="off"
+            disabled
+          >
+
+          <div class="practice-actions">
+            <button
+              id="start-practice-button"
+              class="primary-button"
+              type="button"
+            >
+              Start practice
+            </button>
+
+            <button
+              id="check-answer-button"
+              class="secondary-button"
+              type="submit"
+              disabled
+            >
+              Check answer
+            </button>
+
+            <button
+              id="next-question-button"
+              class="secondary-button"
+              type="button"
+              disabled
+            >
+              Next question
+            </button>
+          </div>
+        </form>
+
+        <p
+          id="practice-feedback"
+          class="status-message"
+          role="status"
+          aria-live="polite"
+        ></p>
+      </div>
+    </section>
+
+    <!-- Translation history -->
+    <section
+      id="history-section"
+      class="history-section"
+      aria-labelledby="history-heading"
+    >
+      <div class="section-heading">
+        <div>
+          <h2 id="history-heading">Recent translations</h2>
+          <p>Your saved translations, stored in this browser.</p>
+        </div>
+
+        <button
+          id="clear-history-button"
+          class="text-button"
+          type="button"
+        >
+          Clear history
+        </button>
+      </div>
+
+      <div class="history-toolbar">
+        <label for="history-filter">Filter history</label>
+
+        <select id="history-filter">
+          <option value="all">All translations</option>
+          <option value="english-to-morse">English → Morse</option>
+          <option value="morse-to-english">Morse → English</option>
+        </select>
+
+        <div class="export-actions">
+          <button
+            id="export-txt-button"
+            class="secondary-button"
+            type="button"
+          >
+            ↓ Export TXT
+          </button>
+
+          <button
+            id="export-csv-button"
+            class="secondary-button"
+            type="button"
+          >
+            ↓ Export CSV
+          </button>
+        </div>
+      </div>
+
+      <div id="history-list" class="history-list">
+        <p class="empty-state">
+          Your translations will appear here.
+        </p>
+      </div>
+
+      <p
+        id="history-status"
+        class="status-message"
+        role="status"
+        aria-live="polite"
+      ></p>
+    </section>
+
+    <!-- Settings -->
+    <section
+      id="settings-section"
+      class="feature-section"
+      aria-labelledby="settings-heading"
+    >
+      <div class="section-intro">
+        <p class="eyebrow">MAKE IT YOURS</p>
+        <h2 id="settings-heading">Preferences</h2>
+        <p>Choose how MorseFlow behaves in your browser.</p>
+      </div>
+
+      <div class="feature-card settings-card">
+        <div class="setting-row">
+          <div>
+            <h3>Default translation mode</h3>
+            <p>Choose which direction opens first.</p>
+          </div>
+
+          <select id="default-direction">
             <option value="english-to-morse">English → Morse</option>
             <option value="morse-to-english">Morse → English</option>
           </select>
         </div>
 
-        <div class="editor-grid">
-          <div class="panel">
-            <div class="panel-header">
-              <label for="input-text" id="input-label"> English text </label>
-              <span id="input-count">0 characters</span>
-            </div>
-
-            <textarea
-              id="input-text"
-              placeholder="Type something here..."
-              rows="7"
-              spellcheck="false"
-            ></textarea>
-
-            <button id="clear-button" class="text-button" type="button">
-              Clear input
-            </button>
+        <div class="setting-row">
+          <div>
+            <h3>Save translation history</h3>
+            <p>Store your translations in this browser.</p>
           </div>
 
-          <div class="panel output-panel">
-            <div class="panel-header">
-              <label for="output-text" id="output-label"> Morse code </label>
-              <span id="output-count">0 characters</span>
-            </div>
-
-            <textarea
-              id="output-text"
-              placeholder="Your translation will appear here..."
-              rows="7"
-              readonly
-              spellcheck="false"
-            ></textarea>
-
-            <button id="copy-button" class="text-button" type="button">
-              Copy translation
-            </button>
-          </div>
+          <input
+            id="save-history-toggle"
+            type="checkbox"
+            checked
+            aria-label="Save translation history"
+          >
         </div>
 
         <p
-          id="status-message"
+          id="settings-status"
           class="status-message"
           role="status"
           aria-live="polite"
         ></p>
-      </section>
+      </div>
+    </section>
 
-      <section class="history-section">
-        <div class="section-heading">
-          <div>
-            <h2>Recent translations</h2>
-            <p>Your saved translation history.</p>
-          </div>
+  </main>
 
-          <button id="clear-history-button" class="text-button" type="button">
-            Clear history
-          </button>
-        </div>
-
-        <div id="history-list" class="history-list">
-          <p class="empty-state">Your translations will appear here.</p>
-        </div>
-      </section>
-    </main>
-
-    <footer class="footer">
-      <p>MorseFlow · Built with HTML, CSS & JavaScript</p>
-      <p>Your history stays in your browser.</p>
-    </footer>
-  </body>
+  <!-- Footer -->
+  <footer class="footer">
+    <p>MorseFlow · Built with HTML, CSS &amp; JavaScript</p>
+    <p>Your translations stay in your browser.</p>
+    <a href="#translator-section">Back to top ↑</a>
+  </footer>
+</body>
 </html>

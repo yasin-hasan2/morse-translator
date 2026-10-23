@@ -1,11 +1,69 @@
-/* =========================================
-   MorseFlow - Translator Logic
-   Vanilla JavaScript + localStorage
-========================================= */
+"use strict";
 
-// 1. Morse code dictionary
+/* ========================================
+   MorseFlow - Complete JavaScript
+   ======================================== */
 
-const morseCode = {
+/* ---------- DOM Elements ---------- */
+
+const inputText = document.getElementById("input-text");
+const outputText = document.getElementById("output-text");
+
+const directionSelect = document.getElementById("direction");
+const inputLabel = document.getElementById("input-label");
+const outputLabel = document.getElementById("output-label");
+
+const inputCount = document.getElementById("input-count");
+const outputCount = document.getElementById("output-count");
+
+const clearButton = document.getElementById("clear-button");
+const copyButton = document.getElementById("copy-button");
+const themeToggle = document.getElementById("theme-toggle");
+const statusMessage = document.getElementById("status-message");
+
+const historyList = document.getElementById("history-list");
+const clearHistoryButton = document.getElementById("clear-history-button");
+const historyFilter = document.getElementById("history-filter");
+const historyStatus = document.getElementById("history-status");
+
+const exportTxtButton = document.getElementById("export-txt-button");
+const exportCsvButton = document.getElementById("export-csv-button");
+
+const audioSpeed = document.getElementById("audio-speed");
+const audioFrequency = document.getElementById("audio-frequency");
+const playAudioButton = document.getElementById("play-audio-button");
+const pauseAudioButton = document.getElementById("pause-audio-button");
+const stopAudioButton = document.getElementById("stop-audio-button");
+const audioStatus = document.getElementById("audio-status");
+
+const practiceForm = document.getElementById("practice-form");
+const practicePrompt = document.getElementById("practice-prompt");
+const practiceAnswer = document.getElementById("practice-answer");
+const practiceScore = document.getElementById("practice-score");
+const practiceFeedback = document.getElementById("practice-feedback");
+
+const startPracticeButton = document.getElementById("start-practice-button");
+const checkAnswerButton = document.getElementById("check-answer-button");
+const nextQuestionButton = document.getElementById("next-question-button");
+
+const defaultDirection = document.getElementById("default-direction");
+const saveHistoryToggle = document.getElementById("save-history-toggle");
+const settingsStatus = document.getElementById("settings-status");
+
+/* ---------- Storage Keys ---------- */
+
+const STORAGE_KEYS = {
+  history: "morseFlowHistory",
+  theme: "morseFlowTheme",
+  defaultDirection: "morseFlowDefaultDirection",
+  saveHistory: "morseFlowSaveHistory",
+};
+
+const MAX_HISTORY_ITEMS = 50;
+
+/* ---------- Morse Code Dictionary ---------- */
+
+const MORSE_CODE = {
   A: ".-",
   B: "-...",
   C: "-.-.",
@@ -64,40 +122,102 @@ const morseCode = {
   "@": ".--.-.",
 };
 
-// 2. Reverse dictionary for Morse -> English
-
-const reverseMorse = Object.fromEntries(
-  Object.entries(morseCode).map(([letter, code]) => [code, letter]),
+const REVERSE_MORSE = Object.fromEntries(
+  Object.entries(MORSE_CODE).map(([character, code]) => [code, character]),
 );
 
-// 3. Select HTML elements
+/* ---------- Application State ---------- */
 
-const directionSelect = document.getElementById("direction");
+let historyItems = [];
+let historyTimer = null;
+let currentAudioContext = null;
+let audioCompletionTimer = null;
+let audioEndTime = 0;
+let audioPaused = false;
+let audioPlaying = false;
 
-const inputText = document.getElementById("input-text");
-const outputText = document.getElementById("output-text");
+let practiceActive = false;
+let currentPracticeAnswer = "";
+let practiceCorrect = 0;
+let practiceAttempted = 0;
+let practiceAnswered = false;
 
-const inputLabel = document.getElementById("input-label");
-const outputLabel = document.getElementById("output-label");
+/* ---------- Safe Local Storage ---------- */
 
-const inputCount = document.getElementById("input-count");
-const outputCount = document.getElementById("output-count");
+function readStorage(key, fallback = null) {
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : value;
+  } catch (error) {
+    console.warn("Unable to read local storage:", error);
+    return fallback;
+  }
+}
 
-const clearButton = document.getElementById("clear-button");
-const copyButton = document.getElementById("copy-button");
-const themeToggle = document.getElementById("theme-toggle");
+function writeStorage(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    console.warn("Unable to save to local storage:", error);
+    return false;
+  }
+}
 
-const statusMessage = document.getElementById("status-message");
+function removeStorage(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch (error) {
+    console.warn("Unable to remove local storage:", error);
+  }
+}
 
-const historyList = document.getElementById("history-list");
-const clearHistoryButton = document.getElementById("clear-history-button");
+function loadHistory() {
+  try {
+    const stored = readStorage(STORAGE_KEYS.history, "[]");
+    const parsed = JSON.parse(stored);
 
-// 4. Storage keys
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
 
-const HISTORY_KEY = "morseFlowHistory";
-const THEME_KEY = "morseFlowTheme";
+    return parsed
+      .filter(
+        (item) =>
+          item &&
+          typeof item.input === "string" &&
+          typeof item.output === "string",
+      )
+      .slice(0, MAX_HISTORY_ITEMS);
+  } catch (error) {
+    console.warn("Unable to load translation history:", error);
+    return [];
+  }
+}
 
-// 5. Translation functions
+function saveHistoryToStorage() {
+  if (!isHistorySavingEnabled()) {
+    return;
+  }
+
+  const saved = writeStorage(
+    STORAGE_KEYS.history,
+    JSON.stringify(historyItems),
+  );
+
+  if (!saved) {
+    showMessage(
+      historyStatus,
+      "Could not save history. Check your browser storage settings.",
+    );
+  }
+}
+
+function isHistorySavingEnabled() {
+  return readStorage(STORAGE_KEYS.saveHistory, "true") !== "false";
+}
+
+/* ---------- Translation Functions ---------- */
 
 function englishToMorse(text) {
   return text
@@ -108,239 +228,89 @@ function englishToMorse(text) {
         return "/";
       }
 
-      return morseCode[character] || "?";
+      return MORSE_CODE[character] || "?";
     })
-    .join(" ");
+    .reduce((result, code) => {
+      // Keep spaces between letters and one slash between words.
+      if (code === "/") {
+        while (result.length && result[result.length - 1] === "") {
+          result.pop();
+        }
+
+        if (result.length && result[result.length - 1] !== "/") {
+          result.push("/");
+        }
+      } else {
+        result.push(code);
+      }
+
+      return result;
+    }, [])
+    .join(" ")
+    .replace(/\s*\/\s*/g, " / ")
+    .trim();
 }
 
 function morseToEnglish(text) {
-  const trimmedText = text.trim();
+  const normalized = text.trim().replace(/[•·]/g, ".").replace(/[–—−]/g, "-");
 
-  if (!trimmedText) {
+  if (!normalized) {
     return "";
   }
 
-  // Words are separated by /.
-  // Letters within each word are separated by spaces.
-  return trimmedText
-    .split(/\s*\/\s*/)
+  return normalized
+    .split(/\s*\/\s*|\s{3,}/)
     .map((word) => {
-      if (!word.trim()) {
-        return "";
-      }
-
       return word
         .trim()
         .split(/\s+/)
-        .map((code) => reverseMorse[code] || "�")
+        .filter(Boolean)
+        .map((code) => REVERSE_MORSE[code] || "�")
         .join("");
     })
     .join(" ");
 }
 
-// 6. Update character counts
-
-function updateCounts() {
-  inputCount.textContent = `${inputText.value.length} characters`;
-
-  outputCount.textContent = `${outputText.value.length} characters`;
-}
-
-// 7. Status messages
-
-function showStatus(message, isError = false) {
-  statusMessage.textContent = message;
-  statusMessage.classList.toggle("error", isError);
-}
-
-// 8. Read translation history safely
-
-function getHistory() {
-  try {
-    const saved = localStorage.getItem(HISTORY_KEY);
-
-    if (!saved) {
-      return [];
-    }
-
-    const parsed = JSON.parse(saved);
-
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("Could not read translation history:", error);
-    return [];
+function translateText(text, direction) {
+  if (!text.trim()) {
+    return "";
   }
-}
 
-// 9. Save translation history
-
-function saveHistory(history) {
-  try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-
-    return true;
-  } catch (error) {
-    console.error("Could not save translation history:", error);
-    showStatus("Could not save history. Browser storage may be full.", true);
-
-    return false;
+  if (direction === "morse-to-english") {
+    return morseToEnglish(text);
   }
+
+  return englishToMorse(text);
 }
 
-// 10. Render saved history
+/* ---------- Status Messages ---------- */
 
-function renderHistory() {
-  const history = getHistory();
-
-  historyList.replaceChildren();
-
-  if (history.length === 0) {
-    const emptyMessage = document.createElement("p");
-
-    emptyMessage.className = "empty-state";
-    emptyMessage.textContent = "Your translations will appear here.";
-
-    historyList.appendChild(emptyMessage);
+function showMessage(element, message, type = "info") {
+  if (!element) {
     return;
   }
 
-  history.forEach((item) => {
-    const card = document.createElement("article");
-    card.className = "history-item";
+  element.textContent = message;
 
-    const header = document.createElement("div");
-    header.className = "history-item-header";
-
-    const mode = document.createElement("strong");
-    mode.textContent = item.mode;
-
-    const date = document.createElement("span");
-    const parsedDate = new Date(item.timestamp);
-
-    date.textContent = Number.isNaN(parsedDate.getTime())
-      ? ""
-      : parsedDate.toLocaleString();
-
-    header.append(mode, date);
-
-    const original = document.createElement("p");
-    original.className = "history-original";
-    original.textContent = `Input: ${item.input}`;
-
-    const result = document.createElement("p");
-    result.className = "history-result";
-    result.textContent = `Output: ${item.output}`;
-
-    const actions = document.createElement("div");
-    actions.className = "history-actions";
-
-    const restoreButton = document.createElement("button");
-    restoreButton.type = "button";
-    restoreButton.className = "text-button";
-    restoreButton.textContent = "Use again";
-
-    restoreButton.addEventListener("click", () => {
-      directionSelect.value = item.direction;
-      inputText.value = item.input;
-
-      updateModeLabels();
-      translate({ save: false });
-
-      inputText.focus();
-      showStatus("Translation restored.");
-    });
-
-    const deleteButton = document.createElement("button");
-    deleteButton.type = "button";
-    deleteButton.className = "text-button";
-    deleteButton.textContent = "Delete";
-
-    deleteButton.addEventListener("click", () => {
-      const updatedHistory = getHistory().filter(
-        (entry) => entry.id !== item.id,
-      );
-
-      if (saveHistory(updatedHistory)) {
-        renderHistory();
-        showStatus("History item deleted.");
-      }
-    });
-
-    actions.append(restoreButton, deleteButton);
-    card.append(header, original, result, actions);
-    historyList.appendChild(card);
-  });
+  element.style.color =
+    type === "success"
+      ? "var(--success)"
+      : type === "error"
+        ? "var(--danger)"
+        : "var(--text-muted)";
 }
 
-// 11. Save the current translation
+/* ---------- Character Counts ---------- */
 
-function addToHistory(input, output) {
-  const history = getHistory();
+function updateCharacterCounts() {
+  inputCount.textContent = `${inputText.value.length} character${inputText.value.length === 1 ? "" : "s"}`;
 
-  const entry = {
-    id: `${Date.now()}-${Math.random()}`,
-    input,
-    output,
-    direction: directionSelect.value,
-    mode:
-      directionSelect.value === "english-to-morse"
-        ? "English → Morse"
-        : "Morse → English",
-    timestamp: new Date().toISOString(),
-  };
-
-  // Keep the most recent 50 translations.
-  const updatedHistory = [entry, ...history].slice(0, 50);
-
-  if (saveHistory(updatedHistory)) {
-    renderHistory();
-  }
+  outputCount.textContent = `${outputText.value.length} character${outputText.value.length === 1 ? "" : "s"}`;
 }
 
-// 12. Translate input
+/* ---------- Direction Labels ---------- */
 
-function translate({ save = true } = {}) {
-  const originalInput = inputText.value;
-  const trimmedInput = originalInput.trim();
-
-  let result = "";
-
-  if (trimmedInput) {
-    if (directionSelect.value === "english-to-morse") {
-      result = englishToMorse(originalInput);
-    } else {
-      result = morseToEnglish(originalInput);
-    }
-  }
-
-  outputText.value = result;
-
-  updateCounts();
-
-  if (!trimmedInput) {
-    showStatus("");
-    return;
-  }
-
-  if (result.includes("?") && directionSelect.value === "english-to-morse") {
-    showStatus("Some characters are unsupported and shown as ?.", true);
-  } else if (
-    result.includes("�") &&
-    directionSelect.value === "morse-to-english"
-  ) {
-    showStatus("Some Morse sequences are unknown and shown as �.", true);
-  } else {
-    showStatus("Translation complete.");
-  }
-
-  if (save && result) {
-    addToHistory(originalInput, result);
-  }
-}
-
-// 13. Update labels when direction changes
-
-function updateModeLabels() {
+function updateDirectionLabels() {
   const isEnglishToMorse = directionSelect.value === "english-to-morse";
 
   inputLabel.textContent = isEnglishToMorse ? "English text" : "Morse code";
@@ -349,55 +319,109 @@ function updateModeLabels() {
 
   inputText.placeholder = isEnglishToMorse
     ? "Type English text here..."
-    : "Enter Morse code, e.g. .... . .-.. .-.. ---";
+    : "Enter Morse code, for example: .... . .-.. .-.. ---";
 
   outputText.placeholder = isEnglishToMorse
     ? "Your Morse translation will appear here..."
     : "Your English translation will appear here...";
 
-  translate();
+  document.getElementById("input-help").textContent = isEnglishToMorse
+    ? "Enter the English text you want to translate."
+    : "Use dots, dashes, spaces between letters, and / between words.";
+
+  updateCharacterCounts();
 }
 
-// 14. Clear input and output
+/* ---------- Main Translator ---------- */
 
-function clearTranslation() {
+function translateCurrentText() {
+  const translated = translateText(inputText.value, directionSelect.value);
+
+  outputText.value = translated;
+
+  updateCharacterCounts();
+
+  if (!inputText.value.trim()) {
+    showMessage(statusMessage, "");
+  } else if (
+    translated.includes("?") &&
+    directionSelect.value === "english-to-morse"
+  ) {
+    showMessage(
+      statusMessage,
+      "Some characters are unsupported and are shown as ?.",
+    );
+  } else if (translated.includes("�")) {
+    showMessage(statusMessage, "Some Morse sequences were not recognized.");
+  } else {
+    showMessage(statusMessage, "Translation updated.", "success");
+  }
+
+  scheduleHistorySave();
+}
+
+function changeDirection() {
+  directionSelect.value =
+    directionSelect.value === "english-to-morse"
+      ? "morse-to-english"
+      : "english-to-morse";
+
+  updateDirectionLabels();
+  translateCurrentText();
+}
+
+function clearInput() {
+  clearTimeout(historyTimer);
+
   inputText.value = "";
   outputText.value = "";
 
-  updateCounts();
-  showStatus("");
-
+  updateCharacterCounts();
+  showMessage(statusMessage, "Input cleared.");
   inputText.focus();
 }
 
-// 15. Copy output
+/* ---------- Copy Translation ---------- */
 
 async function copyTranslation() {
-  if (!outputText.value) {
-    showStatus("There is no translation to copy.", true);
+  const text = outputText.value;
+
+  if (!text) {
+    showMessage(statusMessage, "There is no translation to copy.");
     return;
   }
 
   try {
-    await navigator.clipboard.writeText(outputText.value);
-    showStatus("Translation copied to clipboard.");
+    await navigator.clipboard.writeText(text);
+    showMessage(statusMessage, "Translation copied!", "success");
   } catch (error) {
-    // Fallback for browsers without Clipboard API access.
+    // Fallback for browsers where Clipboard API is unavailable.
     outputText.focus();
     outputText.select();
 
-    const copied = document.execCommand("copy");
+    try {
+      const copied = document.execCommand("copy");
 
-    showStatus(
-      copied
-        ? "Translation copied to clipboard."
-        : "Copy failed. Please select and copy the text manually.",
-      !copied,
-    );
+      showMessage(
+        statusMessage,
+        copied
+          ? "Translation copied!"
+          : "Copy failed. Select the text and copy it manually.",
+        copied ? "success" : "error",
+      );
+    } catch {
+      showMessage(
+        statusMessage,
+        "Copy failed. Select the text and copy it manually.",
+        "error",
+      );
+    }
+
+    window.getSelection()?.removeAllRanges();
   }
 }
 
-// 16. Dark and light theme
+/* ---------- Theme ---------- */
 
 function applyTheme(theme) {
   const isLight = theme === "light";
@@ -410,39 +434,216 @@ function applyTheme(theme) {
     "aria-label",
     isLight ? "Switch to dark theme" : "Switch to light theme",
   );
+
+  themeToggle.title = isLight
+    ? "Switch to dark theme"
+    : "Switch to light theme";
+
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute("content", isLight ? "#f5f7ff" : "#0b1020");
 }
 
 function toggleTheme() {
-  const isLight = !document.body.classList.contains("light-theme");
+  const currentTheme = document.body.classList.contains("light-theme")
+    ? "light"
+    : "dark";
 
-  const theme = isLight ? "light" : "dark";
+  const newTheme = currentTheme === "light" ? "dark" : "light";
 
-  applyTheme(theme);
-
-  try {
-    localStorage.setItem(THEME_KEY, theme);
-  } catch (error) {
-    console.warn("Could not save theme preference:", error);
-  }
+  applyTheme(newTheme);
+  writeStorage(STORAGE_KEYS.theme, newTheme);
 }
 
-function loadTheme() {
-  try {
-    const savedTheme = localStorage.getItem(THEME_KEY);
+/* ---------- Translation History ---------- */
 
-    applyTheme(savedTheme === "light" ? "light" : "dark");
-  } catch (error) {
-    applyTheme("dark");
+function scheduleHistorySave() {
+  clearTimeout(historyTimer);
+
+  if (!isHistorySavingEnabled()) {
+    return;
   }
+
+  if (!inputText.value.trim() || !outputText.value.trim()) {
+    return;
+  }
+
+  // Wait until the user pauses typing before saving.
+  historyTimer = setTimeout(() => {
+    saveCurrentTranslation();
+  }, 800);
 }
 
-// 17. Clear all history
+function saveCurrentTranslation() {
+  if (!isHistorySavingEnabled()) {
+    return;
+  }
+
+  const input = inputText.value.trim();
+  const output = outputText.value.trim();
+  const direction = directionSelect.value;
+
+  if (!input || !output) {
+    return;
+  }
+
+  const newest = historyItems[0];
+
+  // Avoid repeatedly saving an unchanged translation.
+  if (
+    newest &&
+    newest.input === input &&
+    newest.output === output &&
+    newest.direction === direction
+  ) {
+    return;
+  }
+
+  const item = {
+    id:
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    input,
+    output,
+    direction,
+    mode: direction,
+    timestamp: new Date().toISOString(),
+  };
+
+  historyItems.unshift(item);
+  historyItems = historyItems.slice(0, MAX_HISTORY_ITEMS);
+
+  saveHistoryToStorage();
+  renderHistory();
+}
+
+function formatTimestamp(timestamp) {
+  const date = new Date(timestamp);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Date unavailable";
+  }
+
+  return date.toLocaleString();
+}
+
+function createHistoryItem(item) {
+  const article = document.createElement("article");
+  article.className = "history-item";
+
+  const content = document.createElement("div");
+  content.className = "history-content";
+
+  const input = document.createElement("p");
+  input.className = "history-input";
+
+  const inputHeading = document.createElement("strong");
+  inputHeading.textContent =
+    item.direction === "morse-to-english" ? "Morse: " : "English: ";
+
+  input.append(inputHeading, document.createTextNode(item.input));
+
+  const output = document.createElement("p");
+  output.className = "history-output";
+
+  const outputHeading = document.createElement("strong");
+  outputHeading.textContent =
+    item.direction === "morse-to-english" ? "English: " : "Morse: ";
+
+  output.append(outputHeading, document.createTextNode(item.output));
+
+  const meta = document.createElement("div");
+  meta.className = "history-meta";
+
+  const date = document.createElement("span");
+  date.textContent = formatTimestamp(item.timestamp);
+
+  const mode = document.createElement("span");
+  mode.textContent =
+    item.direction === "morse-to-english"
+      ? "Morse → English"
+      : "English → Morse";
+
+  meta.append(date, mode);
+  content.append(input, output, meta);
+
+  const actions = document.createElement("div");
+  actions.className = "history-actions";
+
+  const useButton = document.createElement("button");
+  useButton.className = "secondary-button";
+  useButton.type = "button";
+  useButton.textContent = "Use again";
+
+  useButton.addEventListener("click", () => {
+    directionSelect.value = item.direction;
+    inputText.value = item.input;
+
+    updateDirectionLabels();
+    translateCurrentText();
+
+    document
+      .getElementById("translator-section")
+      .scrollIntoView({ behavior: "smooth" });
+
+    inputText.focus();
+  });
+
+  const deleteButton = document.createElement("button");
+  deleteButton.className = "text-button";
+  deleteButton.type = "button";
+  deleteButton.textContent = "Delete";
+
+  deleteButton.addEventListener("click", () => {
+    deleteHistoryItem(item.id);
+  });
+
+  actions.append(useButton, deleteButton);
+  article.append(content, actions);
+
+  return article;
+}
+
+function renderHistory() {
+  historyList.replaceChildren();
+
+  const filter = historyFilter.value;
+
+  const filteredItems = historyItems.filter((item) => {
+    return filter === "all" || item.direction === filter;
+  });
+
+  if (filteredItems.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+
+    empty.textContent =
+      historyItems.length === 0
+        ? "Your translations will appear here."
+        : "No translations match this filter.";
+
+    historyList.appendChild(empty);
+    return;
+  }
+
+  filteredItems.forEach((item) => {
+    historyList.appendChild(createHistoryItem(item));
+  });
+}
+
+function deleteHistoryItem(id) {
+  historyItems = historyItems.filter((item) => item.id !== id);
+
+  saveHistoryToStorage();
+  renderHistory();
+
+  showMessage(historyStatus, "Translation deleted.", "success");
+}
 
 function clearHistory() {
-  const history = getHistory();
-
-  if (history.length === 0) {
-    showStatus("There is no history to clear.");
+  if (historyItems.length === 0) {
+    showMessage(historyStatus, "Your history is already empty.");
     return;
   }
 
@@ -454,37 +655,575 @@ function clearHistory() {
     return;
   }
 
-  if (saveHistory([])) {
-    renderHistory();
-    showStatus("Translation history cleared.");
+  historyItems = [];
+  removeStorage(STORAGE_KEYS.history);
+
+  renderHistory();
+  showMessage(historyStatus, "Translation history cleared.", "success");
+}
+
+/* ---------- Export History ---------- */
+
+function getExportItems() {
+  const filter = historyFilter.value;
+
+  return historyItems.filter((item) => {
+    return filter === "all" || item.direction === filter;
+  });
+}
+
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], {
+    type: `${mimeType};charset=utf-8;`,
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportHistoryTXT() {
+  const items = getExportItems();
+
+  if (items.length === 0) {
+    showMessage(historyStatus, "There is no history to export.");
+    return;
+  }
+
+  const content = items
+    .map((item) => {
+      return [
+        `Date: ${formatTimestamp(item.timestamp)}`,
+        `Direction: ${item.direction}`,
+        `Input: ${item.input}`,
+        `Output: ${item.output}`,
+        "-".repeat(35),
+      ].join("\n");
+    })
+    .join("\n\n");
+
+  downloadFile(content, "morseflow-history.txt", "text/plain");
+
+  showMessage(historyStatus, "TXT file exported.", "success");
+}
+
+function escapeCSV(value) {
+  const text = String(value ?? "");
+
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function exportHistoryCSV() {
+  const items = getExportItems();
+
+  if (items.length === 0) {
+    showMessage(historyStatus, "There is no history to export.");
+    return;
+  }
+
+  const rows = [
+    ["Date", "Direction", "Input", "Output"],
+    ...items.map((item) => [
+      formatTimestamp(item.timestamp),
+      item.direction,
+      item.input,
+      item.output,
+    ]),
+  ];
+
+  const csv = rows.map((row) => row.map(escapeCSV).join(",")).join("\r\n");
+
+  // BOM helps spreadsheet programs display UTF-8 correctly.
+  downloadFile("\uFEFF" + csv, "morseflow-history.csv", "text/csv");
+
+  showMessage(historyStatus, "CSV file exported.", "success");
+}
+
+/* ---------- Morse Audio Player ---------- */
+
+function getAudioMorseCode() {
+  // The source of the audio is always Morse code,
+  // regardless of the selected translation direction.
+  if (directionSelect.value === "english-to-morse") {
+    return outputText.value.trim();
+  }
+
+  return englishToMorse(outputText.value.trim());
+}
+
+function getSpeedUnit() {
+  switch (audioSpeed.value) {
+    case "slow":
+      return 0.18;
+    case "fast":
+      return 0.06;
+    default:
+      return 0.1;
   }
 }
 
-// 18. Event listeners
+function updateAudioButtons() {
+  playAudioButton.disabled = audioPlaying && !audioPaused;
+  pauseAudioButton.disabled = !audioPlaying;
+  stopAudioButton.disabled = !audioPlaying;
 
-inputText.addEventListener("input", () => {
-  translate();
-});
+  if (audioPaused) {
+    pauseAudioButton.textContent = "▶ Resume";
+  } else {
+    pauseAudioButton.textContent = "⏸ Pause";
+  }
+}
+
+function scheduleMorseAudio(context, code, unit, frequency) {
+  const gain = context.createGain();
+
+  gain.gain.value = 0;
+  gain.connect(context.destination);
+
+  let time = context.currentTime + 0.08;
+
+  const volume = 0.15;
+
+  for (let index = 0; index < code.length; index++) {
+    const symbol = code[index];
+
+    if (symbol === "." || symbol === "-") {
+      const duration = symbol === "." ? unit : unit * 3;
+
+      const oscillator = context.createOscillator();
+      const toneGain = context.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
+
+      toneGain.gain.setValueAtTime(0, time);
+      toneGain.gain.linearRampToValueAtTime(volume, time + 0.005);
+      toneGain.gain.setValueAtTime(volume, time + duration - 0.005);
+      toneGain.gain.linearRampToValueAtTime(0, time + duration);
+
+      oscillator.connect(toneGain);
+      toneGain.connect(context.destination);
+
+      oscillator.start(time);
+      oscillator.stop(time + duration + 0.01);
+
+      time += duration + unit;
+    } else if (symbol === "/") {
+      // Extra gap between words.
+      time += unit * 6;
+    } else if (symbol === " ") {
+      // The preceding tone already added a one-unit gap.
+      // Add two more units to make the total letter gap three.
+      time += unit * 2;
+    } else {
+      // Unsupported symbols are ignored by the audio player.
+      continue;
+    }
+  }
+
+  return time;
+}
+
+async function playMorseAudio() {
+  if (audioPlaying && !audioPaused) {
+    return;
+  }
+
+  if (audioPaused && currentAudioContext) {
+    await resumeMorseAudio();
+    return;
+  }
+
+  const code = getAudioMorseCode();
+
+  if (!code) {
+    showMessage(audioStatus, "Translate some text before playing audio.");
+    return;
+  }
+
+  if (!/[.-]/.test(code)) {
+    showMessage(audioStatus, "No playable Morse signals were found.");
+    return;
+  }
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+  if (!AudioContextClass) {
+    showMessage(
+      audioStatus,
+      "Your browser does not support Web Audio.",
+      "error",
+    );
+    return;
+  }
+
+  try {
+    currentAudioContext = new AudioContextClass();
+
+    if (currentAudioContext.state === "suspended") {
+      await currentAudioContext.resume();
+    }
+
+    const unit = getSpeedUnit();
+    const frequency = Number(audioFrequency.value) || 600;
+
+    audioPlaying = true;
+    audioPaused = false;
+
+    const endTime = scheduleMorseAudio(
+      currentAudioContext,
+      code,
+      unit,
+      frequency,
+    );
+
+    audioEndTime = endTime;
+
+    updateAudioButtons();
+
+    showMessage(audioStatus, "Playing Morse code…", "success");
+
+    const finishInMilliseconds = Math.max(
+      0,
+      (endTime - currentAudioContext.currentTime) * 1000,
+    );
+
+    audioCompletionTimer = setTimeout(() => {
+      finishMorseAudio();
+    }, finishInMilliseconds + 100);
+  } catch (error) {
+    console.error("Morse audio playback failed:", error);
+
+    stopMorseAudio();
+
+    showMessage(
+      audioStatus,
+      "Could not play audio. Please try again.",
+      "error",
+    );
+  }
+}
+
+async function pauseMorseAudio() {
+  if (!currentAudioContext || !audioPlaying) {
+    return;
+  }
+
+  if (audioPaused) {
+    await resumeMorseAudio();
+    return;
+  }
+
+  try {
+    clearTimeout(audioCompletionTimer);
+
+    await currentAudioContext.suspend();
+
+    audioPaused = true;
+    updateAudioButtons();
+
+    showMessage(audioStatus, "Audio paused.");
+  } catch (error) {
+    console.error("Unable to pause audio:", error);
+    showMessage(audioStatus, "Could not pause audio.", "error");
+  }
+}
+
+async function resumeMorseAudio() {
+  if (!currentAudioContext || !audioPaused) {
+    return;
+  }
+
+  try {
+    await currentAudioContext.resume();
+
+    audioPaused = false;
+    updateAudioButtons();
+
+    const remaining = Math.max(
+      0,
+      (audioEndTime - currentAudioContext.currentTime) * 1000,
+    );
+
+    audioCompletionTimer = setTimeout(() => {
+      finishMorseAudio();
+    }, remaining + 100);
+
+    showMessage(audioStatus, "Playing Morse code…", "success");
+  } catch (error) {
+    console.error("Unable to resume audio:", error);
+    showMessage(audioStatus, "Could not resume audio.", "error");
+  }
+}
+
+async function finishMorseAudio() {
+  clearTimeout(audioCompletionTimer);
+
+  const context = currentAudioContext;
+
+  currentAudioContext = null;
+  audioPlaying = false;
+  audioPaused = false;
+
+  updateAudioButtons();
+
+  if (context) {
+    try {
+      await context.close();
+    } catch (error) {
+      console.warn("Unable to close audio context:", error);
+    }
+  }
+
+  showMessage(audioStatus, "Playback finished.", "success");
+}
+
+async function stopMorseAudio() {
+  clearTimeout(audioCompletionTimer);
+
+  const context = currentAudioContext;
+
+  currentAudioContext = null;
+  audioPlaying = false;
+  audioPaused = false;
+
+  updateAudioButtons();
+
+  if (context) {
+    try {
+      await context.close();
+    } catch (error) {
+      console.warn("Unable to stop audio cleanly:", error);
+    }
+  }
+
+  showMessage(audioStatus, "Playback stopped.");
+}
+
+/* ---------- Practice Mode ---------- */
+
+const PRACTICE_WORDS = [
+  "SOS",
+  "HELLO",
+  "WORLD",
+  "CODE",
+  "MORSE",
+  "HELP",
+  "TEST",
+  "RADIO",
+  "SIGNAL",
+  "LEARN",
+  "JAVASCRIPT",
+  "FRIEND",
+  "GOOD",
+  "NIGHT",
+  "THANKS",
+  "YES",
+  "NO",
+  "START",
+  "STOP",
+  "READY",
+];
+
+function updatePracticeScore() {
+  practiceScore.textContent = `${practiceCorrect} / ${practiceAttempted}`;
+}
+
+function generatePracticeQuestion() {
+  const index = Math.floor(Math.random() * PRACTICE_WORDS.length);
+
+  currentPracticeAnswer = PRACTICE_WORDS[index];
+  practicePrompt.textContent = englishToMorse(currentPracticeAnswer);
+
+  practiceAnswer.value = "";
+  practiceAnswer.disabled = false;
+
+  checkAnswerButton.disabled = false;
+  nextQuestionButton.disabled = true;
+
+  practiceAnswered = false;
+
+  showMessage(practiceFeedback, "");
+  practiceAnswer.focus();
+}
+
+function startPractice() {
+  practiceActive = true;
+  practiceCorrect = 0;
+  practiceAttempted = 0;
+
+  updatePracticeScore();
+
+  startPracticeButton.textContent = "Restart practice";
+
+  generatePracticeQuestion();
+}
+
+function checkPracticeAnswer(event) {
+  event.preventDefault();
+
+  if (!practiceActive || practiceAnswered) {
+    return;
+  }
+
+  const answer = practiceAnswer.value.trim().toUpperCase();
+
+  if (!answer) {
+    showMessage(practiceFeedback, "Enter your answer first.");
+    practiceAnswer.focus();
+    return;
+  }
+
+  practiceAnswered = true;
+  practiceAttempted++;
+
+  if (answer === currentPracticeAnswer) {
+    practiceCorrect++;
+
+    showMessage(practiceFeedback, "Correct! Well done.", "success");
+  } else {
+    showMessage(
+      practiceFeedback,
+      `Not quite. The correct answer is ${currentPracticeAnswer}.`,
+      "error",
+    );
+  }
+
+  updatePracticeScore();
+
+  practiceAnswer.disabled = true;
+  checkAnswerButton.disabled = true;
+  nextQuestionButton.disabled = false;
+}
+
+function nextPracticeQuestion() {
+  if (!practiceActive) {
+    return;
+  }
+
+  generatePracticeQuestion();
+}
+
+/* ---------- Preferences ---------- */
+
+function applyDefaultDirection(direction) {
+  const validDirections = ["english-to-morse", "morse-to-english"];
+
+  const selected = validDirections.includes(direction)
+    ? direction
+    : "english-to-morse";
+
+  directionSelect.value = selected;
+  defaultDirection.value = selected;
+
+  updateDirectionLabels();
+}
+
+function changeDefaultDirection() {
+  writeStorage(STORAGE_KEYS.defaultDirection, defaultDirection.value);
+
+  applyDefaultDirection(defaultDirection.value);
+
+  // Change the active translation mode too.
+  translateCurrentText();
+
+  showMessage(settingsStatus, "Default translation mode saved.", "success");
+}
+
+function changeSaveHistoryPreference() {
+  const enabled = saveHistoryToggle.checked;
+
+  writeStorage(STORAGE_KEYS.saveHistory, enabled ? "true" : "false");
+
+  if (!enabled) {
+    clearTimeout(historyTimer);
+
+    showMessage(
+      settingsStatus,
+      "History saving is off. Existing history has been kept.",
+    );
+  } else {
+    showMessage(settingsStatus, "History saving is on.", "success");
+
+    // Save the current translation if one is available.
+    scheduleHistorySave();
+  }
+}
+
+/* ---------- Event Listeners ---------- */
+
+inputText.addEventListener("input", translateCurrentText);
 
 directionSelect.addEventListener("change", () => {
-  updateModeLabels();
+  updateDirectionLabels();
+  translateCurrentText();
 });
 
-clearButton.addEventListener("click", clearTranslation);
-
+clearButton.addEventListener("click", clearInput);
 copyButton.addEventListener("click", copyTranslation);
 
 themeToggle.addEventListener("click", toggleTheme);
 
 clearHistoryButton.addEventListener("click", clearHistory);
+historyFilter.addEventListener("change", renderHistory);
 
-// 19. Initialize the application
+exportTxtButton.addEventListener("click", exportHistoryTXT);
+exportCsvButton.addEventListener("click", exportHistoryCSV);
 
-function init() {
-  loadTheme();
-  updateModeLabels();
-  updateCounts();
+playAudioButton.addEventListener("click", playMorseAudio);
+pauseAudioButton.addEventListener("click", pauseMorseAudio);
+stopAudioButton.addEventListener("click", stopMorseAudio);
+
+startPracticeButton.addEventListener("click", startPractice);
+practiceForm.addEventListener("submit", checkPracticeAnswer);
+
+nextQuestionButton.addEventListener("click", nextPracticeQuestion);
+
+defaultDirection.addEventListener("change", changeDefaultDirection);
+
+saveHistoryToggle.addEventListener("change", changeSaveHistoryPreference);
+
+/* ---------- Initialize Application ---------- */
+
+function initializeMorseFlow() {
+  // Restore the saved theme.
+  const savedTheme = readStorage(STORAGE_KEYS.theme, "dark");
+
+  applyTheme(savedTheme === "light" ? "light" : "dark");
+
+  // Restore preferences.
+  const savedDirection = readStorage(
+    STORAGE_KEYS.defaultDirection,
+    "english-to-morse",
+  );
+
+  applyDefaultDirection(savedDirection);
+
+  saveHistoryToggle.checked = isHistorySavingEnabled();
+
+  // Restore translation history.
+  historyItems = loadHistory();
   renderHistory();
+
+  // Initialize translator and counters.
+  translateCurrentText();
+  updateCharacterCounts();
+
+  // Set initial audio controls.
+  updateAudioButtons();
+
+  // Set the initial practice score.
+  updatePracticeScore();
+
+  showMessage(audioStatus, "Translate some text to get started.");
 }
 
-init();
+initializeMorseFlow();
