@@ -1227,3 +1227,219 @@ function initializeMorseFlow() {
 }
 
 initializeMorseFlow();
+
+/* =========================================
+   MORSEFLOW: ALPHABET BOOK
+   ========================================= */
+
+(() => {
+  const alphabetGrid = document.getElementById("alphabet-grid");
+  const alphabetSearch = document.getElementById("alphabet-search");
+  const alphabetFilters = document.querySelectorAll(".alphabet-filter");
+  const alphabetResults = document.getElementById("alphabet-results");
+  const alphabetCopyFeedback = document.getElementById(
+    "alphabet-copy-feedback",
+  );
+
+  if (!alphabetGrid || typeof MORSE_CODE === "undefined") {
+    console.warn(
+      "MorseFlow: Alphabet Book elements or MORSE_CODE are missing.",
+    );
+    return;
+  }
+
+  let activeCategory = "all";
+
+  function getCategory(character) {
+    if (/^[A-Z]$/i.test(character)) return "letters";
+    if (/^[0-9]$/.test(character)) return "numbers";
+    return "punctuation";
+  }
+
+  function renderAlphabetBook() {
+    const query = (alphabetSearch?.value || "").trim().toUpperCase();
+
+    const entries = Object.entries(MORSE_CODE).filter(([character, code]) => {
+      const matchesCategory =
+        activeCategory === "all" || getCategory(character) === activeCategory;
+
+      const matchesSearch =
+        character.toUpperCase().includes(query) || code.includes(query);
+
+      return matchesCategory && matchesSearch;
+    });
+
+    alphabetGrid.replaceChildren();
+
+    if (entries.length === 0) {
+      const emptyMessage = document.createElement("p");
+      emptyMessage.className = "alphabet-empty";
+      emptyMessage.textContent = "No matching Morse code entries found.";
+      alphabetGrid.appendChild(emptyMessage);
+
+      if (alphabetResults) {
+        alphabetResults.textContent = "No entries found.";
+      }
+      return;
+    }
+
+    entries.forEach(([character, code]) => {
+      const card = document.createElement("button");
+
+      card.type = "button";
+      card.className = "alphabet-card";
+      card.setAttribute(
+        "aria-label",
+        `Copy Morse code for ${character}: ${code}`,
+      );
+
+      const characterElement = document.createElement("span");
+      characterElement.className = "alphabet-character";
+      characterElement.textContent = character;
+
+      const codeElement = document.createElement("span");
+      codeElement.className = "alphabet-code";
+      codeElement.textContent = code;
+
+      const categoryElement = document.createElement("span");
+      categoryElement.className = "alphabet-category";
+      categoryElement.textContent = getCategory(character);
+
+      card.append(characterElement, codeElement, categoryElement);
+
+      card.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(code);
+
+          if (alphabetCopyFeedback) {
+            alphabetCopyFeedback.textContent = `Copied ${character}: ${code}`;
+          }
+        } catch (error) {
+          if (alphabetCopyFeedback) {
+            alphabetCopyFeedback.textContent =
+              "Clipboard access failed. Please try again.";
+          }
+          console.error("Could not copy Morse code:", error);
+        }
+      });
+
+      alphabetGrid.appendChild(card);
+    });
+
+    if (alphabetResults) {
+      alphabetResults.textContent = `${entries.length} ${entries.length === 1 ? "entry" : "entries"} found.`;
+    }
+  }
+
+  alphabetSearch?.addEventListener("input", renderAlphabetBook);
+
+  alphabetFilters.forEach((button) => {
+    button.addEventListener("click", () => {
+      activeCategory = button.dataset.category || "all";
+
+      alphabetFilters.forEach((filter) => {
+        const isActive = filter === button;
+
+        filter.classList.toggle("active", isActive);
+        filter.setAttribute("aria-pressed", String(isActive));
+      });
+
+      renderAlphabetBook();
+    });
+  });
+
+  renderAlphabetBook();
+})();
+
+/* =========================================
+   MORSEFLOW: AUDIO VISUALIZER
+   ========================================= */
+
+(() => {
+  const visualizer = document.getElementById("morse-visualizer");
+  const visualizerStatus = document.getElementById("visualizer-status");
+  const audioStatus = document.getElementById("audio-status");
+
+  const playButton = document.getElementById("play-audio-button");
+  const pauseButton = document.getElementById("pause-audio-button");
+  const stopButton = document.getElementById("stop-audio-button");
+
+  if (!visualizer) return;
+
+  function setVisualizerState(state, label) {
+    visualizer.dataset.state = state;
+
+    if (visualizerStatus) {
+      visualizerStatus.textContent = label;
+    }
+
+    const accessibleLabels = {
+      playing: "Morse audio visualization. Audio is playing.",
+      paused: "Morse audio visualization. Audio is paused.",
+      stopped: "Morse audio visualization. Audio is stopped.",
+    };
+
+    visualizer.setAttribute(
+      "aria-label",
+      accessibleLabels[state] || "Morse audio visualization.",
+    );
+  }
+
+  playButton?.addEventListener("click", () => {
+    // Allow the existing audio handler to start playback first.
+    requestAnimationFrame(() => {
+      const statusText = audioStatus?.textContent?.toLowerCase() || "";
+
+      if (statusText.includes("error") || statusText.includes("failed")) {
+        setVisualizerState("stopped", "Audio unavailable");
+        return;
+      }
+
+      setVisualizerState("playing", "Playing");
+    });
+  });
+
+  pauseButton?.addEventListener("click", () => {
+    requestAnimationFrame(() => {
+      const statusText = audioStatus?.textContent?.toLowerCase() || "";
+
+      if (statusText.includes("resum") || statusText.includes("play")) {
+        setVisualizerState("playing", "Playing");
+      } else {
+        setVisualizerState("paused", "Paused");
+      }
+    });
+  });
+
+  stopButton?.addEventListener("click", () => {
+    setVisualizerState("stopped", "Stopped");
+  });
+
+  // Keep the visualizer in sync when the existing audio code
+  // updates its status message.
+  if (audioStatus) {
+    const statusObserver = new MutationObserver(() => {
+      const message = audioStatus.textContent.toLowerCase();
+
+      if (
+        message.includes("finished") ||
+        message.includes("completed") ||
+        message.includes("stopped")
+      ) {
+        setVisualizerState("stopped", "Ready");
+      } else if (message.includes("paused")) {
+        setVisualizerState("paused", "Paused");
+      } else if (message.includes("error") || message.includes("failed")) {
+        setVisualizerState("stopped", "Audio unavailable");
+      }
+    });
+
+    statusObserver.observe(audioStatus, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+  }
+
+  setVisualizerState("stopped", "Ready");
+})();
