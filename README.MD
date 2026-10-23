@@ -30,10 +30,10 @@ MorseFlow is a lightweight, browser-based translator that converts English text 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/morse-translator.git
+git clone https://github.com/yasin-hasan2/morse-translator.git
 ```
 
-Replace `  ` with your GitHub username.
+Replace `yasin-hasan2` with your GitHub username.
 
 ### 2. Open the project
 
